@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.DEBUG)
 eps = 1e-6
 
 class YFOptimizer(object):
-  def __init__(self, var_list, lr=0.0001, mu=0.0, max_mu=0.995, clip_thresh=None, weight_decay=0.0,
+  def __init__(self, var_list, lr=0.0001, mu=0.0, max_mu=1.0, clip_thresh=None, weight_decay=0.0,
     beta=0.999, curv_win_width=20, zero_debias=True, sparsity_debias=False, delta_mu=0.0, 
     auto_clip_fac=None, force_non_inc_step=False, h_max_log_smooth=True, h_min_log_smooth=True, 
     checkpoint_interval=1000, verbose=False, adapt_clip=True, stat_protect_fac=100.0, catastrophic_move_thresh=100.0,
@@ -29,6 +29,7 @@ class YFOptimizer(object):
     Args:
       lr: python scalar. The initial value of learning rate, we use 1.0 in our paper.
       mu: python scalar. The initial value of momentum, we use 0.0 in our paper.
+      max_mu: a hard upper limit on momentum. Should be in the range (0,1).
       clip_thresh: python scalar. The manaully-set clipping threshold for tf.clip_by_global_norm.
         if None, the automatic clipping can be carried out. The automatic clipping 
         feature is parameterized by argument auto_clip_fac. The auto clip feature
@@ -481,7 +482,8 @@ class YFOptimizer(object):
     dr = max( (self._h_max + eps) / (self._h_min + eps), 1.0 + eps)
     self._mu_t = max(root**2, ( (np.sqrt(dr) - 1) / (np.sqrt(dr) + 1) )**2 )
     # TO ensure momentum < 1
-    self._mu_t = min(self._mu_t, self._max_mu)
+    if self._max_mu is not None:
+        self._mu_t = min(self._mu_t, self._max_mu)
     return 
 
 

@@ -1,3 +1,7 @@
+# 2020-10-14 raw.githubusercontent.com/JianGoForIt/YellowFin_Pytorch/master/tuner_utils/yellowfin.py
+# fmt: off
+# flake8: noqa
+# pylint: skip-file
 import math
 import numpy as np
 import torch
@@ -6,11 +10,13 @@ import logging
 import os
 import pickle as cp
 
+logging.basicConfig(level=logging.DEBUG)
+
 # eps for numerical stability
 eps = 1e-6
 
 class YFOptimizer(object):
-  def __init__(self, var_list, lr=0.0001, mu=0.0, clip_thresh=None, weight_decay=0.0,
+  def __init__(self, var_list, lr=0.0001, mu=0.0, max_mu=0.995, clip_thresh=None, weight_decay=0.0,
     beta=0.999, curv_win_width=20, zero_debias=True, sparsity_debias=False, delta_mu=0.0, 
     auto_clip_fac=None, force_non_inc_step=False, h_max_log_smooth=True, h_min_log_smooth=True, 
     checkpoint_interval=1000, verbose=False, adapt_clip=True, stat_protect_fac=100.0, catastrophic_move_thresh=100.0,
@@ -51,6 +57,7 @@ class YFOptimizer(object):
     '''
     self._lr = lr
     self._mu = mu
+    self._max_mu = max_mu
     self._lr_t = lr
     self._mu_t = mu
     # we convert var_list from generator to list so that
@@ -380,7 +387,8 @@ class YFOptimizer(object):
         if self._verbose:
           logging.debug("Iteration  %f", self._iter) 
           logging.debug("param grad squared gid %d, pid %d, %f, log scale: %f", group_id, p_id, param_grad_norm_squared,
-            np.log(param_grad_norm_squared + 1e-10) / np.log(10) )   
+            # np.log(param_grad_norm_squared + 1e-10) / np.log(10) )   
+            torch.log(param_grad_norm_squared + 1e-10) / np.log(10) )   
 
     if self._iter >= 1:
       self._exploding_grad_clip_thresh = self._h_max
@@ -396,7 +404,8 @@ class YFOptimizer(object):
         
     if self._verbose:
       logging.debug("overall grad norm squared %f, log scale: %f", 
-        global_state['grad_norm_squared'], np.log(global_state['grad_norm_squared'] + 1e-10) / np.log(10))
+        # global_state['grad_norm_squared'], np.log(global_state['grad_norm_squared'] + 1e-10) / np.log(10))
+        global_state['grad_norm_squared'], torch.log(global_state['grad_norm_squared'] + 1e-10) / np.log(10))
 
 
     if self._sparsity_debias:
@@ -471,6 +480,8 @@ class YFOptimizer(object):
     root = self.get_cubic_root()
     dr = max( (self._h_max + eps) / (self._h_min + eps), 1.0 + eps)
     self._mu_t = max(root**2, ( (np.sqrt(dr) - 1) / (np.sqrt(dr) + 1) )**2 )
+    # TO ensure momentum < 1
+    self._mu_t = min(self._mu_t, self._max_mu)
     return 
 
 
@@ -546,7 +557,8 @@ class YFOptimizer(object):
       if self._exploding_grad_detected and self._verbose:
         logging.warning("exploding gradient detected: grad norm detection thresh %f , grad norm %f, grad norm after clip%f", 
           np.sqrt(self._exploding_grad_clip_thresh), 
-          np.sqrt(self._global_state['grad_norm_squared'] ), 
+          # np.sqrt(self._global_state['grad_norm_squared'] ), 
+          torch.sqrt(self._global_state['grad_norm_squared'] ), 
           self._exploding_grad_clip_target_value)
       if self._adapt_clip and self._exploding_grad_detected:
         # print("exploding gradient detected: grad norm detection thresh ", np.sqrt(self._exploding_grad_clip_thresh), 
@@ -568,4 +580,3 @@ class YFOptimizer(object):
         self.load_state_dict_perturb(copy.deepcopy(self._state_checkpoint) )
 
     return 
-
